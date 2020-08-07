@@ -5,15 +5,36 @@ const md5 = require('blueimp-md5')
 const router = express.Router()
 
 router.get('/', (req, res) => {
-  res.render('index.html')
+  res.render('index.html', {
+    user: req.session.user
+  })
 })
 
 router.get('/login', (req, res) => {
   res.render('login.html')
 })
 
-router.post('/login', (req, res) => {
-
+router.post('/login', (req, res, next) => {
+  const loginUser = req.body
+  User.findOne({
+    email: loginUser.email,
+    password: md5(md5(loginUser.password))
+  }).then(
+    user => {
+      if (!user) {
+        return res.status(200).json({
+          err_code: 1,
+          message: 'Email or password is invalid'
+        })
+      }
+      req.session.user = user
+      res.status(200).json({
+        err_code: 0,
+        message: 'ok'
+      })
+    },
+    err => next(err)
+  )
 })
 
 router.get('/register', (req, res) => {
@@ -61,7 +82,7 @@ router.get('/register', (req, res) => {
 }) */
 
 //优雅的写法
-router.post('/register', async (req, res) => {
+router.post('/register', async (req, res, next) => {
   const newUser = req.body
   try {
     if (await User.findOne({ email: newUser.email })) {
@@ -81,16 +102,22 @@ router.post('/register', async (req, res) => {
 
     await new User(newUser).save()
 
-    return res.status(200).json({
+    req.session.user = newUser
+
+    res.status(200).json({
       err_code: 0,
       message: 'ok'
     })
   } catch (err) {
-    return res.status(500).json({
-      err_code: 500,
-      message: 'Server error'
-    })
+      next(err)
   }
+})
+
+router.get('/logout', (req, res) => {
+  //清除登录状态
+  req.session.user = null
+  //重定向到登录页，因为是同步的，可以在服务端重定向
+  res.redirect('/login')
 })
 
 
